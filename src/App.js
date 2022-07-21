@@ -1,5 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Blog from "./components/Blog";
+import Blogform from "./components/Blogform";
+import Loginform from "./components/Loginform";
+import Toggalable from "./components/Toggalable";
 import blogService from "./services/blogs";
 import login from "./services/login";
 
@@ -12,9 +15,12 @@ const App = () => {
   const [author, setAuthor] = useState("");
   const [url, setUrl] = useState("");
   const [message, setMessage] = useState(null);
+  const blogFormRef = useRef();
 
   useEffect(() => {
-    blogService.getAll().then((blogs) => setBlogs(blogs));
+    blogService
+      .getAll()
+      .then((blogs) => setBlogs(blogs.sort((a, b) => b.likes - a.likes)));
   }, []);
   useEffect(() => {
     const loggedUser = window.localStorage.getItem("loggedUser");
@@ -22,7 +28,7 @@ const App = () => {
       setUser(JSON.parse(loggedUser));
     }
   }, []);
-  const handleLogin = async (e) => {
+  const handleLogin = async (e, username, password) => {
     e.preventDefault();
     try {
       const userdata = await login(username, password);
@@ -52,33 +58,7 @@ const App = () => {
       </div>
     );
   };
-  const loginForm = () => (
-    <>
-      <form onSubmit={handleLogin}>
-        <h2>Login to application</h2>
-        {notification(message)}
-        <div>
-          <label htmlFor="username">Username</label>
-          <input
-            type="text"
-            id="username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-          />
-        </div>
-        <div>
-          <label htmlFor="password">Password</label>
-          <input
-            type="password"
-            id="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-        <input type="submit" value="login" />
-      </form>
-    </>
-  );
+
   const handleCreate = async (e) => {
     e.preventDefault();
     const newBlog = {
@@ -87,6 +67,7 @@ const App = () => {
       url,
     };
     const token = user.token;
+    blogFormRef.current.visibleToggle();
     try {
       const savedBlog = await blogService.create(newBlog, token);
       setTitle("");
@@ -104,50 +85,66 @@ const App = () => {
       console.log(error.message);
     }
   };
-  const blogForm = () => (
+  const handleDelete = (blog) => {
+    if (window.confirm(`Remove blog ${blog.title} by ${blog.author}`)) {
+      if (!user) {
+        setMessage({
+          type: "error",
+          message: "invalid user, login to delete blog",
+        });
+        window.setTimeout(() => setMessage(null), 2000);
+      } else {
+        blogService.remove(blog.id, user.token);
+        setBlogs(blogs.filter((b) => b.id !== blog.id));
+      }
+    }
+  };
+  const handleUpdate = (blog) => {
+    blog = { ...blog, likes: ++blog.likes };
+    blogService.update(blog);
+    setBlogs(blogs.map((b) => (b.id === blog.id ? blog : b)));
+  };
+  return (
     <>
-      <h2>blogs</h2>
+      <h2>{!user ? "Login to application" : "Blogs"}</h2>
       {notification(message)}
-      <p>{user.name} logged in</p>
-      <button onClick={handleLogout}>logout</button>
-      <form onSubmit={handleCreate}>
+      {!user ? (
+        <Loginform
+          handleLogin={handleLogin}
+          username={username}
+          setUsername={setUsername}
+          password={password}
+          setPassword={setPassword}
+        />
+      ) : (
         <div>
-          <label htmlFor="title">Title</label>
-          <input
-            type="text"
-            id="title"
-            onChange={(e) => setTitle(e.target.value)}
-            value={title}
-          />
+          <label>{user.name} logged in</label>
+          <button onClick={handleLogout}>logout</button>
+          <Toggalable ref={blogFormRef} btn1="cancle" btn2="create new blog">
+            <Blogform
+              handleCreate={handleCreate}
+              title={title}
+              author={author}
+              url={url}
+              setTitle={setTitle}
+              setAuthor={setAuthor}
+              setUrl={setUrl}
+            />
+          </Toggalable>
         </div>
-        <div>
-          <label htmlFor="author">Author</label>
-          <input
-            type="text"
-            id="author"
-            onChange={(e) => setAuthor(e.target.value)}
-            value={author}
-          />
-        </div>
-        <div>
-          <label htmlFor="url">Url</label>
-          <input
-            type="text"
-            id="url"
-            onChange={(e) => setUrl(e.target.value)}
-            value={url}
-          />
-        </div>
-        <input type="submit" value="Create" />
-      </form>
+      )}
       <div>
         {blogs.map((blog) => (
-          <Blog key={blog.id} blog={blog} />
+          <Blog
+            key={blog.id}
+            blog={blog}
+            handleDelete={handleDelete}
+            handleUpdate={handleUpdate}
+          />
         ))}
       </div>
     </>
   );
-  return !user ? loginForm() : blogForm();
 };
 
 export default App;
