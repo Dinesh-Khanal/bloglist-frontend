@@ -25,7 +25,9 @@ const Loginform = ({
           onChange={(e) => setPassword(e.target.value)}
         />
       </div>
-      <input type="submit" value="login" />
+      <button type="submit" id="btn-login">
+        login
+      </button>
     </form>
   );
 };
